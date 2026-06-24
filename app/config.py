@@ -8,3 +8,4 @@ INFLUX_BUCKET = "mybucket"
 MEASUREMENT = "weather_station"
 STATION_TAG = "station"
 STATION_VALUE = "lab_station_01"
+

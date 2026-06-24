@@ -4,12 +4,18 @@ import random
 from influxdb_client import Point, WritePrecision
 from influxdb_client.client.write_api import WriteOptions
 
-from app.config import INFLUX_BUCKET, INFLUX_ORG, MEASUREMENT, STATION_TAG, STATION_VALUE
+from app.config import (
+    INFLUX_BUCKET,
+    INFLUX_ORG,
+    MEASUREMENT,
+    STATION_TAG,
+    STATION_VALUE,
+)
 from app.influx_client import get_client, is_db_available
 
 
-def seed_data(num_points: int = 100) -> tuple[bool, str]:
-    """Generise nasumicna IoT ocitavanja za poslednja 24h i upisuje ih batch metodom."""
+def seed_data(num_points: int = 100, station_value: str | None = None) -> tuple[bool, str]:
+    """Generise nasumicna IoT ocitavanja za poslednja 24h za odabrani grad."""
     client = None
     write_api = None
 
@@ -30,6 +36,8 @@ def seed_data(num_points: int = 100) -> tuple[bool, str]:
         now_utc = datetime.now(timezone.utc)
         points: list[Point] = []
 
+        station = station_value.strip() if station_value else STATION_VALUE
+
         for _ in range(num_points):
             seconds_ago = random.uniform(0, 24 * 60 * 60)
             point_time = now_utc - timedelta(seconds=seconds_ago)
@@ -38,7 +46,7 @@ def seed_data(num_points: int = 100) -> tuple[bool, str]:
 
             point = (
                 Point(MEASUREMENT)
-                .tag(STATION_TAG, STATION_VALUE)
+                .tag(STATION_TAG, station)
                 .field("temperature", temperature)
                 .field("humidity", humidity)
                 .time(point_time, WritePrecision.S)
@@ -47,7 +55,7 @@ def seed_data(num_points: int = 100) -> tuple[bool, str]:
 
         write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=points)
         write_api.flush()
-        return True, f"Uspesno upisano {num_points} testnih ocitavanja za poslednja 24h."
+        return True, f"Uspesno upisano {num_points} testnih ocitavanja za grad '{station}'."
     except Exception as exc:
         return False, f"Greska pri generisanju podataka: {exc}"
     finally:
@@ -57,8 +65,12 @@ def seed_data(num_points: int = 100) -> tuple[bool, str]:
             client.close()
 
 
-def write_realtime_reading(temperature: float, humidity: float) -> tuple[bool, str]:
-    """Upisuje jedno rucno ocitavanje u trenutnom vremenu."""
+def write_realtime_reading(
+    temperature: float,
+    humidity: float,
+    station_value: str | None = None,
+) -> tuple[bool, str]:
+    """Upisuje jedno rucno ocitavanje za odabrani grad u trenutnom vremenu."""
     client = None
     write_api = None
 
@@ -76,9 +88,11 @@ def write_realtime_reading(temperature: float, humidity: float) -> tuple[bool, s
             )
         )
 
+        station = station_value.strip() if station_value else STATION_VALUE
+
         point = (
             Point(MEASUREMENT)
-            .tag(STATION_TAG, STATION_VALUE)
+            .tag(STATION_TAG, station)
             .field("temperature", round(float(temperature), 2))
             .field("humidity", round(float(humidity), 2))
             .time(datetime.now(timezone.utc), WritePrecision.S)
@@ -86,7 +100,7 @@ def write_realtime_reading(temperature: float, humidity: float) -> tuple[bool, s
 
         write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
         write_api.flush()
-        return True, "Rucno ocitavanje je uspesno upisano u InfluxDB."
+        return True, f"Rucno ocitavanje za grad '{station}' je uspesno upisano u InfluxDB."
     except Exception as exc:
         return False, f"Greska pri upisu ocitavanja: {exc}"
     finally:
@@ -94,3 +108,4 @@ def write_realtime_reading(temperature: float, humidity: float) -> tuple[bool, s
             write_api.close()
         if client is not None:
             client.close()
+

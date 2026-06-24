@@ -4,8 +4,8 @@ from app.config import INFLUX_BUCKET, INFLUX_ORG, MEASUREMENT, STATION_TAG
 from app.influx_client import get_client, is_db_available
 
 
-def query_last_24h() -> tuple[pd.DataFrame, str | None]:
-    """Vuce temperature i vlaznost za poslednja 24h putem Flux upita."""
+def query_last_24h(start_hours: int = 24) -> tuple[pd.DataFrame, str | None]:
+    """Vuce temperature i vlaznost za poslednjih `start_hours` sati putem Flux upita."""
     client = None
 
     try:
@@ -18,7 +18,7 @@ def query_last_24h() -> tuple[pd.DataFrame, str | None]:
         # InfluxDB je TSDB optimizovana za vreme-serijske tokove podataka.
         flux_query = f'''
 from(bucket: "{INFLUX_BUCKET}")
-  |> range(start: -24h)
+  |> range(start: -{start_hours}h)
   |> filter(fn: (r) => r["_measurement"] == "{MEASUREMENT}")
   |> filter(fn: (r) => r["_field"] == "temperature" or r["_field"] == "humidity")
   |> keep(columns: ["_time", "_field", "_value", "{STATION_TAG}"])
@@ -38,11 +38,11 @@ from(bucket: "{INFLUX_BUCKET}")
         if data.empty:
             return pd.DataFrame(), None
 
-        expected_cols = {"_time", "_field", "_value"}
+        expected_cols = {"_time", "_field", "_value", STATION_TAG}
         if not expected_cols.issubset(set(data.columns)):
-            return pd.DataFrame(), "Flux upit nije vratio ocekivane kolone (_time, _field, _value)."
+            return pd.DataFrame(), f"Flux upit nije vratio ocekivane kolone (_time, _field, _value, {STATION_TAG})."
 
-        data = data[["_time", "_field", "_value"]].copy()
+        data = data[["_time", "_field", "_value", STATION_TAG]].copy()
         data["_time"] = pd.to_datetime(data["_time"], utc=True)
         data.sort_values("_time", inplace=True)
 
@@ -52,3 +52,6 @@ from(bucket: "{INFLUX_BUCKET}")
     finally:
         if client is not None:
             client.close()
+
+
+
